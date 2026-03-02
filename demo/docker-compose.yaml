@@ -1,0 +1,90 @@
+# ===========================================
+# Run demo using this docker compose file
+# docker compose up -d
+# docker compose run demo
+# ===========================================
+name: celery-tracker
+services:
+  django:
+    build:
+      context: ..
+      dockerfile: demo/backend/Dockerfile
+    depends_on:
+      redis:
+        condition: service_healthy
+    environment:
+      DJANGO_SETTINGS_MODULE: demoproject.settings
+      CELERY_BROKER_URL: redis://redis:6379/0
+      CELERY_RESULT_BACKEND: redis://redis:6379/0
+    ports:
+      - "8000:8000"
+    volumes:
+      - ..:/app
+    working_dir: /app/demo/backend
+    command: sh -c "python manage.py migrate --run-syncdb && python manage.py runserver 0.0.0.0:8000"
+
+  worker:
+    build:
+      context: ..
+      dockerfile: demo/backend/Dockerfile
+    depends_on:
+      redis:
+        condition: service_healthy
+    environment:
+      DJANGO_SETTINGS_MODULE: demoproject.settings
+      CELERY_BROKER_URL: redis://redis:6379/0
+      CELERY_RESULT_BACKEND: redis://redis:6379/0
+    volumes:
+      - ..:/app
+    working_dir: /app/demo/backend
+    command: celery -A demoproject.celery worker --loglevel=DEBUG
+
+  demo:
+    build:
+      context: ..
+      dockerfile: demo/backend/Dockerfile
+    depends_on:
+      redis:
+        condition: service_healthy
+      worker:
+        condition: service_started
+    environment:
+      CELERY_BROKER_URL: redis://redis:6379/0
+      CELERY_RESULT_BACKEND: redis://redis:6379/0
+    volumes:
+      - ..:/app
+    profiles:
+      - cli
+
+  frontend:
+    image: node:22-alpine
+    working_dir: /app
+    environment:
+      CI: "true"
+      API_URL: "http://django:8000"
+    ports:
+      - "5173:5173"
+    volumes:
+      - ./frontend:/app
+    command: sh -c "corepack enable && pnpm install --frozen-lockfile && pnpm dev --host 0.0.0.0"
+
+  redis:
+    image: redis:7-alpine
+    ports:
+      - "6379:6379"
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 5s
+      timeout: 3s
+      retries: 5
+
+  # rabbitmq:
+  #   image: rabbitmq:3-management-alpine
+  #   ports:
+  #     - "5672:5672"
+  #     - "15672:15672"
+  #   healthcheck:
+  #     test: ["CMD", "rabbitmq-diagnostics", "check_port_connectivity"]
+  #     interval: 10s
+  #     timeout: 5s
+  #     retries: 5

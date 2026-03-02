@@ -1,0 +1,270 @@
+:root {
+    font-family:
+        system-ui,
+        -apple-system,
+        "Segoe UI",
+        Helvetica,
+        Arial,
+        sans-serif;
+    line-height: 1.5;
+    font-weight: 400;
+
+    color-scheme: light dark;
+    color: #213547;
+    background-color: #ffffff;
+
+    font-synthesis: none;
+    text-rendering: optimizeLegibility;
+    -webkit-font-smoothing: antialiased;
+    -moz-osx-font-smoothing: grayscale;
+}
+
+@media (prefers-color-scheme: dark) {
+    :root {
+        color: rgba(255, 255, 255, 0.87);
+        background-color: #1a1a2e;
+    }
+}
+
+*,
+*::before,
+*::after {
+    box-sizing: border-box;
+}
+
+html,
+body,
+#root {
+    margin: 0;
+    height: 100%;
+}
+
+/* ── App shell ──────────────────────────────────────────────────────── */
+
+.app {
+    display: flex;
+    flex-direction: column;
+    height: 100%;
+    max-width: 1200px;
+    margin: 0 auto;
+}
+
+.app-header {
+    flex-shrink: 0;
+    padding: 1.25rem 1.5rem 0;
+}
+
+.app-header h1 {
+    font-size: 1.5rem;
+    margin: 0 0 0.25rem;
+}
+
+.app-header p {
+    margin: 0;
+    font-size: 0.85rem;
+}
+
+/* ── Two-column layout ──────────────────────────────────────────────── */
+
+.columns {
+    display: flex;
+    flex: 1;
+    min-height: 0; /* allow children to shrink below content size */
+    gap: 1px;
+}
+
+.col-left {
+    flex: 1;
+    overflow-y: auto;
+    padding: 1rem 1.5rem 2rem;
+    display: flex;
+    flex-direction: column;
+    gap: 1rem;
+}
+
+.col-right {
+    width: 380px;
+    flex-shrink: 0;
+    overflow-y: auto;
+    padding: 1rem 1.5rem 2rem;
+    border-left: 1px solid rgba(128, 128, 128, 0.15);
+}
+
+.col-right h2 {
+    position: sticky;
+    top: -1rem;
+    margin: 0 -1.5rem;
+    padding: 0.75rem 1.5rem 0.5rem;
+    background: inherit;
+    z-index: 1;
+}
+
+@media (prefers-color-scheme: dark) {
+    .col-right {
+        border-left-color: rgba(255, 255, 255, 0.08);
+    }
+}
+
+/* ── Typography ─────────────────────────────────────────────────────── */
+
+h2 {
+    font-size: 1.1rem;
+    margin: 0 0 0.5rem;
+}
+
+code {
+    font-family: ui-monospace, "Cascadia Code", "Fira Code", Menlo, monospace;
+    font-size: 0.85em;
+}
+
+/* ── Buttons ────────────────────────────────────────────────────────── */
+
+button {
+    border-radius: 6px;
+    border: 1px solid rgba(128, 128, 128, 0.3);
+    padding: 0.35em 0.9em;
+    font-size: 0.85rem;
+    font-weight: 500;
+    font-family: inherit;
+    cursor: pointer;
+    background-color: #f0f0f0;
+    color: inherit;
+    transition:
+        background-color 0.15s,
+        border-color 0.15s;
+}
+
+button:hover {
+    background-color: #e0e0e0;
+    border-color: rgba(128, 128, 128, 0.5);
+}
+
+button:disabled {
+    opacity: 0.5;
+    cursor: not-allowed;
+}
+
+@media (prefers-color-scheme: dark) {
+    button {
+        background-color: #2a2a3e;
+    }
+    button:hover {
+        background-color: #35355a;
+    }
+}
+
+/* ── TaskDemo card ──────────────────────────────────────────────────── */
+
+.task-demo {
+    border: 1px solid rgba(128, 128, 128, 0.2);
+    border-radius: 8px;
+    padding: 14px 16px;
+}
+
+.task-demo-header {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    margin-bottom: 2px;
+}
+
+.task-demo-header h3 {
+    margin: 0;
+    font-size: 1rem;
+}
+
+.task-demo-description {
+    font-size: 0.8rem;
+    color: #64748b;
+    margin: 0 0 10px;
+}
+
+.task-demo-progress {
+    margin-top: 10px;
+}
+
+/* ── Utility text ───────────────────────────────────────────────────── */
+
+.muted {
+    opacity: 0.6;
+    font-style: italic;
+}
+
+.error {
+    color: #b91c1c;
+}
+
+.success {
+    color: #15803d;
+}
+
+@media (prefers-color-scheme: dark) {
+    .error {
+        color: #fca5a5;
+    }
+    .success {
+        color: #86efac;
+    }
+    .task-demo-description {
+        color: #94a3b8;
+    }
+}
+
+/* ── Log viewer ─────────────────────────────────────────────────────── */
+
+.log-viewer {
+    /* height controlled by column scroll — fill available space */
+    border: 1px solid rgba(128, 128, 128, 0.2);
+    border-radius: 6px;
+    padding: 0.5rem;
+    font-family: ui-monospace, "Cascadia Code", "Fira Code", Menlo, monospace;
+    font-size: 0.75rem;
+    line-height: 1.55;
+    background-color: #f8f8f8;
+}
+
+.log-line {
+    white-space: pre-wrap;
+    word-break: break-all;
+}
+
+.log-time {
+    opacity: 0.5;
+    margin-right: 0.75em;
+}
+
+.log-level {
+    font-weight: 600;
+    margin-right: 0.75em;
+}
+
+.log-debug {
+    opacity: 0.55;
+}
+
+.log-info {
+    color: #1d4ed8;
+}
+
+.log-warning {
+    color: #92400e;
+}
+
+.log-error {
+    color: #b91c1c;
+}
+
+@media (prefers-color-scheme: dark) {
+    .log-viewer {
+        background-color: #12121e;
+    }
+    .log-info {
+        color: #93c5fd;
+    }
+    .log-warning {
+        color: #fcd34d;
+    }
+    .log-error {
+        color: #fca5a5;
+    }
+}
