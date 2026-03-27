@@ -1,5 +1,5 @@
 import { useQuery } from "@tanstack/react-query";
-import { useEffect, useRef } from "react";
+import { useEffect, useRef, useState } from "react";
 import { runCeleryTask, fetchWorkerLogs, type LogEntry } from "./api";
 import {
   useTaskControl,
@@ -182,9 +182,52 @@ function TaskDemo({ def }: { def: DemoTaskDef }) {
           />
         </div>
       )}
-      <pre style={{ fontSize: "0.8em", overflow: "hidden" }}>
-        {JSON.stringify(task, null, 2)}
-      </pre>
+      <RawOutputToggle data={task} />
+    </div>
+  );
+}
+
+// =============================================================================
+// RawOutputToggle — collapsible JSON debug view
+// =============================================================================
+
+function RawOutputToggle({ data }: { data: unknown }) {
+  const [open, setOpen] = useState(false);
+  if (!data) return null;
+
+  return (
+    <div style={{ marginTop: "4px" }}>
+      <button
+        type="button"
+        onClick={() => setOpen((v) => !v)}
+        style={{
+          background: "none",
+          border: "none",
+          padding: 0,
+          fontSize: "0.7rem",
+          color: "#94a3b8",
+          cursor: "pointer",
+          fontFamily: "inherit",
+        }}
+      >
+        {open ? "▾ hide output" : "▸ output"}
+      </button>
+      {open && (
+        <pre
+          style={{
+            fontSize: "0.75rem",
+            margin: "4px 0 0",
+            padding: "8px",
+            backgroundColor: "#f8fafc",
+            border: "1px solid #e2e8f0",
+            borderRadius: "4px",
+            overflow: "auto",
+            maxHeight: "300px",
+          }}
+        >
+          {JSON.stringify(data, null, 2)}
+        </pre>
+      )}
     </div>
   );
 }

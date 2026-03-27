@@ -109,9 +109,20 @@ class TrackingContext:
         if _current_tracking.get(None) is not self:
             return  # different thread / async task — not ours
 
-        # Inject the tracker stamp into the outgoing message headers.
-        headers[TRACKER_ID_HEADER] = self.tracker_id
-        headers.setdefault("stamped_headers", []).append(TRACKER_ID_HEADER)
+        # Write the stamp into headers['stamps'] — the same location
+        # Celery's AMQP layer uses for pre-stamped signatures.
+        stamps = headers.get("stamps")
+        if stamps is None:
+            stamps = {}
+            headers["stamps"] = stamps
+        stamps[TRACKER_ID_HEADER] = self.tracker_id
+
+        stamped = headers.get("stamped_headers")
+        if stamped is None:
+            stamped = []
+            headers["stamped_headers"] = stamped
+        if TRACKER_ID_HEADER not in stamped:
+            stamped.append(TRACKER_ID_HEADER)
 
         # Register the member directly — the global handler in
         # tracker.signals connected *before* us so it already ran and

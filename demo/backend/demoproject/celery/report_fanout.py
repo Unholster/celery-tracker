@@ -14,15 +14,14 @@ The canvas structure is::
 Dispatched with::
 
     with tracker.track("Report — fan-out") as t:
-        generate_report_fanout_canvas().apply_async()
+        sig = generate_report_fanout_canvas()
+        sig.stamp(tracker_id=t.tracker_id)
+        sig.apply_async()
 
-The ``track()`` context manager stamps the first published task.
-Celery propagates the stamp through the chord and chain callbacks,
-and the global ``before_task_publish`` signal handler registers each
-task as a member of the tracker as it is dispatched.  The three
-parallel analysis sections all register at once (published client-side
-as a group), while the chord callback and final delivery step register
-on the worker side as they are triggered.
+``track()`` saves the tracker; stamp the full canvas so chord/group
+children carry ``tracker_id`` on worker publish.  The global
+``before_task_publish`` handler registers each task.  Parallel header
+tasks register when the group runs; later steps register as they run.
 
 Each task is also decorated with ``@tracker.step("…")`` so the phase
 appears in *both* ``tasks`` (from signal-based member registration)

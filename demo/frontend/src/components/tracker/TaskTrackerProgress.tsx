@@ -389,7 +389,8 @@ interface TaskTrackerSubtasksListProps {
 /**
  * Renders per-subtask execution states from the TrackerState.tasks dict.
  *
- * Each entry shows: status symbol · title or truncated task ID · error (if failed).
+ * Only includes members that have a non-empty ``title`` (omits bare Celery IDs).
+ * Each row: status symbol · title · error (if failed).
  * Sorted by relevance: running → failed → pending → completed.
  */
 export function TaskTrackerSubtasksList({
@@ -399,7 +400,9 @@ export function TaskTrackerSubtasksList({
 }: TaskTrackerSubtasksListProps) {
   injectStyles();
 
-  const entries = Object.entries(tasks);
+  const entries = Object.entries(tasks).filter(([, state]) =>
+    Boolean(state.title?.trim()),
+  );
   if (entries.length === 0) return null;
 
   const ORDER: Record<string, number> = {
@@ -431,7 +434,7 @@ export function TaskTrackerSubtasksList({
         const symbol = SUBTASK_STATUS_SYMBOLS[state.status] ?? "○";
         const isRunning =
           state.status === "running" || state.status === "retrying";
-        const label = state.title || `${taskId.slice(0, 8)}…`;
+        const label = state.title!.trim();
 
         return (
           <div
@@ -463,6 +466,7 @@ export function TaskTrackerSubtasksList({
             {/* Label + error */}
             <div style={{ flex: 1, minWidth: 0 }}>
               <span
+                title={taskId}
                 style={{
                   fontSize: compact ? "0.75rem" : "0.875rem",
                   overflow: "hidden",

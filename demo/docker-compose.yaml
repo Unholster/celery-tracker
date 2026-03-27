@@ -58,6 +58,9 @@ services:
 
   frontend:
     image: node:22-alpine
+    depends_on:
+      django:
+        condition: service_started
     working_dir: /app
     environment:
       CI: "true"

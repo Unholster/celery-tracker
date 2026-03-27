@@ -6,12 +6,14 @@ and the full pipeline is built as a Celery **chain**.
 Dispatched with::
 
     with tracker.track("Report — chained") as t:
-        generate_report_chained_canvas().apply_async()
+        sig = generate_report_chained_canvas()
+        sig.stamp(tracker_id=t.tracker_id)
+        sig.apply_async()
 
-The ``track()`` context manager stamps the first task in the chain.
-Celery propagates the stamp to each subsequent callback, and the
-global ``before_task_publish`` signal handler registers each task as
-a member of the tracker as it is dispatched by the worker.  Members
+``track()`` saves the tracker and stamps publishes from the client; the
+canvas must also be stamped so each chain link carries ``tracker_id``
+when the worker publishes.  The global
+``before_task_publish`` handler then registers each task.  Members
 appear incrementally — one per chain link — rather than all at once.
 
 Each task is also decorated with ``@tracker.step("…")`` so the phase

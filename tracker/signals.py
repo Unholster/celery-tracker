@@ -24,17 +24,28 @@ from .stamping import TRACKER_ID_HEADER
 logger = logging.getLogger(__name__)
 
 
+def _extract_tracker_id_from_headers(headers: dict) -> str | None:
+    """Read ``tracker_id`` from ``headers['stamps']``.
+
+    Both client-side publishes (:class:`~tracker.track.TrackingContext`)
+    and worker-side publishes (pre-stamped canvas signatures) place the
+    value in ``headers['stamps']``.
+
+    The value may be a bare string or wrapped in a list (canvas
+    propagation).
+    """
+    raw = (headers.get("stamps") or {}).get(TRACKER_ID_HEADER)
+    if raw is None:
+        return None
+    if isinstance(raw, list):
+        return raw[0] if raw else None
+    return raw
+
+
 @before_task_publish.connect
 def _on_task_publish(sender, headers, **kwargs):  # noqa: ANN001, ANN003
     """Register a stamped task as a member of its tracker."""
-    # The stamp may be a bare string or a list (Celery wraps propagated
-    # stamps in lists depending on the canvas structure).
-    raw = headers.get(TRACKER_ID_HEADER)
-    if isinstance(raw, list):
-        tracker_id = raw[0] if raw else None
-    else:
-        tracker_id = raw
-
+    tracker_id = _extract_tracker_id_from_headers(headers)
     if not tracker_id:
         return
 

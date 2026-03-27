@@ -137,7 +137,7 @@ This exposes:
 |--------|----------|-------------|
 | `GET` | `/tracked-tasks` | List all trackers |
 | `GET` | `/tracked-tasks/{id}` | Tracker detail with live Celery state |
-| `GET` | `/tracked-tasks/by-celery-id/{id}` | Look up tracker by Celery task ID |
+| `GET` | `/tracked-tasks/by-celery-id/{id}` | Look up tracker by tracker id or member Celery task id |
 | `POST` | `/tracked-tasks/{id}/cancel` | Revoke all member tasks |
 | `GET` | `/celery-tasks` | List registered Celery task types |
 | `POST` | `/celery-tasks/{name}/run` | Dispatch a task by name and track it |
@@ -159,7 +159,7 @@ cd demo
 docker compose up -d
 ```
 
-This starts five services:
+This starts four services:
 
 | Service | Port | Description |
 |---------|------|-------------|

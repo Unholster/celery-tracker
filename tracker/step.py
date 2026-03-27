@@ -2,7 +2,7 @@ from __future__ import annotations
 
 import functools
 import logging
-from datetime import datetime
+from datetime import UTC, datetime
 
 from celery import current_task
 
@@ -67,12 +67,14 @@ class step:
             return self
 
         self._tracker_id = tracker_id
-        self._started_on = datetime.now()
+        self._celery_task_id = task.request.id
+        self._started_on = datetime.now(UTC)
 
         backend = resolve_backend_for_task()
         step_state = ExecutionState(
             title=self.title,
             state="STARTED",
+            celery_task_id=task.request.id,
             started_on=self._started_on,
         )
         self._step_index = backend.add_step(tracker_id, step_state)
@@ -88,7 +90,7 @@ class step:
         if self._noop:
             return False
 
-        now = datetime.now()
+        now = datetime.now(UTC)
         backend = resolve_backend_for_task()
 
         if exc_type is not None:
@@ -96,6 +98,7 @@ class step:
                 title=self.title,
                 state="FAILURE",
                 info=exc_val,
+                celery_task_id=self._celery_task_id,
                 started_on=self._started_on,
                 completed_on=now,
             )
@@ -103,6 +106,7 @@ class step:
             completed = ExecutionState(
                 title=self.title,
                 state="SUCCESS",
+                celery_task_id=self._celery_task_id,
                 started_on=self._started_on,
                 completed_on=now,
             )
@@ -135,12 +139,14 @@ class step:
 
 
 def _extract_tracker_id(request) -> str | None:  # noqa: ANN001
-    """Read the ``tracker_id`` stamped header from a Celery request.
+    """Read the ``tracker_id`` stamp from a Celery task request.
 
-    Celery nests stamped values inside ``request.stamps`` (a dict),
-    not as top-level attributes.  The value may be a bare string or
-    wrapped in a list depending on the canvas structure, so we
-    normalise both forms.
+    The value lives in ``request.stamps['tracker_id']`` — both
+    client-side publishes and pre-stamped canvas signatures place it in
+    ``headers['stamps']``, which Celery copies to the request.
+
+    The value may be a bare string or wrapped in a list (canvas
+    propagation).
     """
     stamps = getattr(request, "stamps", None) or {}
     raw = stamps.get(TRACKER_ID_HEADER)

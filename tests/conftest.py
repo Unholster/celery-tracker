@@ -6,6 +6,7 @@ import pytest
 
 import tracker.backend
 from tracker.backend import TrackerBackend
+from tracker.backend.trackerbackend import TrackerNotFoundError
 from tracker.models import ExecutionState, TrackerState
 
 # ---------------------------------------------------------------------------
@@ -19,6 +20,7 @@ class InMemoryTrackerBackend(TrackerBackend):
     def __init__(self) -> None:
         self._trackers: dict[str, TrackerState] = {}
         self._members: dict[str, set[str]] = {}
+        self._task_to_tracker: dict[str, str] = {}
         self._steps: dict[str, list[ExecutionState]] = {}
 
     # -- tracker CRUD --------------------------------------------------------
@@ -27,6 +29,8 @@ class InMemoryTrackerBackend(TrackerBackend):
         self._trackers[state.id] = state
 
     def load(self, tracker_id: str) -> TrackerState:
+        if tracker_id not in self._trackers:
+            raise TrackerNotFoundError(f"Tracker {tracker_id} not found")
         return self._trackers[tracker_id]
 
     def list_all(self) -> list[TrackerState]:
@@ -36,9 +40,13 @@ class InMemoryTrackerBackend(TrackerBackend):
 
     def add_member(self, tracker_id: str, task_id: str) -> None:
         self._members.setdefault(tracker_id, set()).add(task_id)
+        self._task_to_tracker[task_id] = tracker_id
 
     def get_members(self, tracker_id: str) -> list[str]:
         return sorted(self._members.get(tracker_id, set()))
+
+    def find_tracker_id_for_member(self, task_id: str) -> str | None:
+        return self._task_to_tracker.get(task_id)
 
     # -- steps ---------------------------------------------------------------
 

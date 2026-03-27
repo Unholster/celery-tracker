@@ -26,6 +26,7 @@ from tracker.api import (
 from tracker.api import (
     list_tracked_tasks as _list_tracked_tasks,
 )
+from tracker.stamping import TRACKER_ID_HEADER
 from tracker.track import track
 
 from .celery.report_chained import CANVAS_RECIPES as CHAINED_RECIPES
@@ -87,7 +88,12 @@ def run_task_or_canvas(request, task_name: str, payload: RunTaskIn | None = None
     try:
         with track(title) as t:
             if builder is not None:
-                builder().apply_async()
+                sig = builder()
+                # Stamp the whole canvas so every link/chord child carries
+                # tracker_id when the worker publishes — track() alone only
+                # stamps the first client-side publish.
+                sig.stamp(**{TRACKER_ID_HEADER: t.tracker_id})
+                sig.apply_async()
             else:
                 current_app.send_task(task_name, args=args, kwargs=kwargs)
     except Exception:

@@ -42,6 +42,10 @@ class TrackerBackend(ABC):
         """Return all task IDs registered as members of a tracker."""
         ...
 
+    def find_tracker_id_for_member(self, task_id: str) -> str | None:
+        """Return the tracker id that lists *task_id* as a member, or ``None``."""
+        return None
+
     # -- steps ---------------------------------------------------------------
 
     @abstractmethod

@@ -16,6 +16,7 @@ class RedisTrackerBackend(TrackerBackend):
     STATE_PREFIX = "celery-tracker:state"
     MEMBERS_PREFIX = "celery-tracker:members"
     STEPS_PREFIX = "celery-tracker:steps"
+    TASK_TO_TRACKER_PREFIX = "celery-tracker:task-to-tracker"
 
     def __init__(self, client: StrictRedis) -> None:
         self._client = client
@@ -47,11 +48,18 @@ class RedisTrackerBackend(TrackerBackend):
     def add_member(self, tracker_id: str, task_id: str) -> None:
         key = self._members_key(tracker_id)
         self._client.sadd(key, task_id)
+        self._client.set(f"{self.TASK_TO_TRACKER_PREFIX}:{task_id}", tracker_id)
 
     def get_members(self, tracker_id: str) -> list[str]:
         key = self._members_key(tracker_id)
         raw: set[bytes] = self._client.smembers(key)  # type: ignore[assignment]
         return sorted(m.decode() for m in raw)
+
+    def find_tracker_id_for_member(self, task_id: str) -> str | None:
+        raw: bytes | None = self._client.get(f"{self.TASK_TO_TRACKER_PREFIX}:{task_id}")  # type: ignore[assignment]
+        if raw is None:
+            return None
+        return raw.decode() if isinstance(raw, bytes) else str(raw)
 
     # -- steps ---------------------------------------------------------------
 

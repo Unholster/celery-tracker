@@ -1,7 +1,7 @@
 from __future__ import annotations
 
 import logging
-from datetime import datetime
+from datetime import UTC, datetime
 from typing import Any, cast
 
 from ..models import CeleryTaskState, ExecutionState, TrackerResult, TrackerState
@@ -122,6 +122,22 @@ class DjangoTrackerBackend(TrackerBackend):
         except TrackerNotFoundError:
             return []
         return row.metadata.get("member_task_ids", [])
+
+    def find_tracker_id_for_member(self, task_id: str) -> str | None:
+        from django.db.models import Q
+
+        row = (
+            self._task_model.objects.filter(
+                Q(celery_task_id=task_id)
+                | Q(metadata__member_task_ids__contains=[task_id]),
+            )
+            .values_list("celery_task_id", "id")
+            .first()
+        )
+        if row is not None:
+            celery_task_id, pk = row
+            return str(celery_task_id) if celery_task_id else str(pk)
+        return None
 
     # -- steps ---------------------------------------------------------------
 
@@ -248,4 +264,4 @@ def _to_datetime(value: Any) -> datetime:
     """Coerce a Django ``DateTimeField`` value to a plain :class:`datetime`."""
     if isinstance(value, datetime):
         return value
-    return datetime.now()
+    return datetime.now(UTC)

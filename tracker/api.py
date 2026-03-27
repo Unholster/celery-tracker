@@ -28,7 +28,7 @@ from ninja import Router, Schema
 
 from .backend import TrackerNotFoundError
 from .models import CeleryTaskState, ExecutionState, TrackerState
-from .service import TrackerService
+from .service import TrackerService, primary_member_celery_task_id
 from .track import track
 
 logger = logging.getLogger(__name__)
@@ -259,10 +259,9 @@ def get_tracked_task(request, tracker_id: str):
     response={HTTPStatus.OK: TrackedTaskDetailOut, HTTPStatus.NOT_FOUND: dict},
 )
 def get_tracked_task_by_celery_id(request, celery_task_id: str):
-    """Get tracked task by Celery task ID.
+    """Get tracked task by Celery task ID (member task id or tracker id).
 
-    In celery-tracker the tracker ID *is* the Celery task/group ID,
-    so this delegates directly to :func:`get_tracked_task`.
+    Accepts either the tracker id or any registered member task id.
     """
     return get_tracked_task(request, tracker_id=celery_task_id)
 
@@ -421,14 +420,19 @@ def _to_list_out(state: TrackerState) -> TrackedTaskListOut:
 
 
 def _to_detail_out(state: TrackerState) -> TrackedTaskDetailOut:
+    step_covered_ids = {
+        s.celery_task_id for s in state.steps if s.celery_task_id
+    }
     tasks_out = {
-        task_id: _task_execution_out(es) for task_id, es in state.tasks.items()
+        task_id: _task_execution_out(es)
+        for task_id, es in state.tasks.items()
+        if task_id not in step_covered_ids
     }
     return TrackedTaskDetailOut(
         id=state.id,
         tracked_task_type=state.result_type,
         name=state.title or "",
-        celery_task_id=state.id,
+        celery_task_id=primary_member_celery_task_id(state),
         status=_STATE_TO_STATUS.get(state.state, state.state),
         progress_current=int(state.progress_completed or 0),
         progress_total=int(state.progress_target or 0),

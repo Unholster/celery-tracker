@@ -374,7 +374,7 @@ export function TaskProgressCard({
             </div>
           )}
 
-          {/* Per-subtask execution states */}
+          {/* Per-subtask execution states (step-covered members already filtered by API) */}
           {task.tasks && Object.keys(task.tasks).length > 0 && (
             <div style={{ marginBottom: "8px" }}>
               <TaskTrackerSubtasksList tasks={task.tasks} compact={compact} />

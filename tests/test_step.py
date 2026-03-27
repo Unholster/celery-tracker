@@ -6,7 +6,8 @@ import pytest
 from conftest import TASK_ID, TRACKER_ID, InMemoryTrackerBackend
 
 from tracker.models import ExecutionState, TrackerState
-from tracker.service import TrackerService
+from tracker.backend import TrackerNotFoundError
+from tracker.service import TrackerService, primary_member_celery_task_id
 from tracker.signals import _on_task_publish
 from tracker.stamping import TRACKER_ID_HEADER
 from tracker.step import step
@@ -208,6 +209,7 @@ class TestStepNoop:
         mock_task = MagicMock()
         mock_task.request.id = "unstamped-task"
         mock_task.request.stamps = {}
+        mock_task.request.tracker_id = None
 
         with patch("tracker.step.current_task", mock_task):
             with step("Orphan"):
@@ -266,7 +268,7 @@ class TestSignalMemberRegistration:
 
         headers = {
             "id": "task-aaa",
-            TRACKER_ID_HEADER: "trk-1",
+            "stamps": {TRACKER_ID_HEADER: "trk-1"},
             "stamped_headers": [TRACKER_ID_HEADER],
         }
         _on_task_publish(sender="my_app.tasks.do_work", headers=headers)
@@ -289,7 +291,7 @@ class TestSignalMemberRegistration:
         for task_id in ("t1", "t2", "t3"):
             headers = {
                 "id": task_id,
-                TRACKER_ID_HEADER: "trk-3",
+                "stamps": {TRACKER_ID_HEADER: "trk-3"},
                 "stamped_headers": [TRACKER_ID_HEADER],
             }
             _on_task_publish(sender="some.task", headers=headers)
@@ -303,7 +305,7 @@ class TestSignalMemberRegistration:
 
         headers = {
             "id": "task-dup",
-            TRACKER_ID_HEADER: "trk-4",
+            "stamps": {TRACKER_ID_HEADER: "trk-4"},
             "stamped_headers": [TRACKER_ID_HEADER],
         }
         _on_task_publish(sender="task", headers=headers)
@@ -317,7 +319,7 @@ class TestSignalMemberRegistration:
 
         headers = {
             "id": "task-list",
-            TRACKER_ID_HEADER: ["trk-5"],
+            "stamps": {TRACKER_ID_HEADER: ["trk-5"]},
             "stamped_headers": [TRACKER_ID_HEADER],
         }
         _on_task_publish(sender="task", headers=headers)
@@ -329,7 +331,7 @@ class TestSignalMemberRegistration:
         backend.save(TrackerState(id="trk-6"))
 
         headers = {
-            TRACKER_ID_HEADER: "trk-6",
+            "stamps": {TRACKER_ID_HEADER: "trk-6"},
             "stamped_headers": [TRACKER_ID_HEADER],
         }
         _on_task_publish(sender="task", headers=headers)
@@ -340,11 +342,37 @@ class TestSignalMemberRegistration:
         """If the backend raises, the signal handler catches and logs."""
         headers = {
             "id": "task-err",
-            TRACKER_ID_HEADER: "no-such-tracker",
+            "stamps": {TRACKER_ID_HEADER: "no-such-tracker"},
             "stamped_headers": [TRACKER_ID_HEADER],
         }
         # Should not raise even though the tracker doesn't exist
         _on_task_publish(sender="task", headers=headers)
+
+    def test_stamp_in_stamps_dict_is_registered(self, backend):
+        """Worker-published tasks carry tracker_id inside headers['stamps']."""
+        backend.save(TrackerState(id="trk-stamps"))
+
+        headers = {
+            "id": "task-worker",
+            "stamped_headers": [TRACKER_ID_HEADER],
+            "stamps": {TRACKER_ID_HEADER: "trk-stamps"},
+        }
+        _on_task_publish(sender="some.chain.callback", headers=headers)
+
+        assert "task-worker" in backend.get_members("trk-stamps")
+
+    def test_stamp_in_stamps_dict_list_wrapped(self, backend):
+        """Canvas propagation may wrap the stamp value in a list."""
+        backend.save(TrackerState(id="trk-wrap"))
+
+        headers = {
+            "id": "task-wrap",
+            "stamped_headers": [TRACKER_ID_HEADER],
+            "stamps": {TRACKER_ID_HEADER: ["trk-wrap"]},
+        }
+        _on_task_publish(sender="task", headers=headers)
+
+        assert "task-wrap" in backend.get_members("trk-wrap")
 
 
 # ---------------------------------------------------------------------------
@@ -404,6 +432,83 @@ class TestGetTrackerWithMembers:
         assert state.title == "Lonely"
         assert state.steps == []
 
+    def test_get_tracker_by_member_task_id(self, backend):
+        backend.save(TrackerState(id="trk-m"))
+        backend.add_member("trk-m", "celery-task-1")
+
+        def fake_async_result(tid):
+            r = MagicMock()
+            r.id = tid
+            r.state = "SUCCESS"
+            r.info = None
+            return r
+
+        with patch("tracker.service.AsyncResult", side_effect=fake_async_result):
+            service = TrackerService(backend)
+            state = service.get_tracker("celery-task-1")
+
+        assert state.id == "trk-m"
+        assert "celery-task-1" in state.tasks
+
+    def test_get_tracker_unknown_raises(self, backend):
+        service = TrackerService(backend)
+        with pytest.raises(TrackerNotFoundError):
+            service.get_tracker("not-a-tracker")
+
+    def test_member_tasks_get_title_from_async_result_name(self, backend):
+        """UI subtask list uses ExecutionState.title; Celery exposes it via AsyncResult.name."""
+        backend.save(TrackerState(id="trk-t"))
+        backend.add_member("trk-t", "tid-1")
+
+        def fake_async_result(tid):
+            r = MagicMock()
+            r.id = tid
+            r.state = "SUCCESS"
+            r.info = None
+            r.name = "demoproject.celery.report_chained.fetch_data"
+            return r
+
+        with patch("tracker.service.AsyncResult", side_effect=fake_async_result):
+            state = TrackerService(backend).get_tracker("trk-t")
+
+        assert state.tasks["tid-1"].title == "Fetch Data"
+
+
+# ---------------------------------------------------------------------------
+# API detail — celery_task_id field
+# ---------------------------------------------------------------------------
+
+
+class TestDetailCeleryTaskId:
+    """``primary_member_celery_task_id`` feeds API ``celery_task_id`` for single-task trackers."""
+
+    def test_single_member_uses_that_task_id(self):
+        state = TrackerState(
+            id="trk",
+            title="x",
+            state="SUCCESS",
+            tasks={
+                "real-celery-uuid": ExecutionState(state="SUCCESS", info=None),
+            },
+        )
+        assert primary_member_celery_task_id(state) == "real-celery-uuid"
+
+    def test_multi_member_omits_celery_task_id(self):
+        state = TrackerState(
+            id="trk",
+            title="x",
+            state="SUCCESS",
+            tasks={
+                "a": ExecutionState(state="SUCCESS", info=None),
+                "b": ExecutionState(state="SUCCESS", info=None),
+            },
+        )
+        assert primary_member_celery_task_id(state) is None
+
+    def test_zero_members_omits_celery_task_id(self):
+        state = TrackerState(id="trk", title="x", state="PENDING", tasks={})
+        assert primary_member_celery_task_id(state) is None
+
 
 # ---------------------------------------------------------------------------
 # TrackingContext — context-manager mode of track()
@@ -448,8 +553,8 @@ class TestTrackingContext:
             finally:
                 before_task_publish.disconnect(fake_handler)
 
-        # The context manager should have injected the stamp into headers
-        assert headers.get(TRACKER_ID_HEADER) == t.tracker_id
+        # The context manager should have injected the stamp into headers['stamps']
+        assert headers.get("stamps", {}).get(TRACKER_ID_HEADER) == t.tracker_id
         assert TRACKER_ID_HEADER in headers.get("stamped_headers", [])
 
     def test_member_registered_on_publish(self, backend):
@@ -477,6 +582,16 @@ class TestTrackingContext:
                 )
 
         assert sorted(backend.get_members(t.tracker_id)) == ["t1", "t2", "t3"]
+
+    def test_stamped_headers_none_still_registers_member(self, backend):
+        """Celery can send ``stamped_headers: None``; member registration must still run."""
+        with track("Celery None stamped_headers") as t:
+            t._on_publish(
+                sender="my.task",
+                headers={"id": "task-xyz", "stamped_headers": None},
+            )
+
+        assert "task-xyz" in backend.get_members(t.tracker_id)
 
     def test_handler_disconnected_after_exit(self, backend):
         """The signal handler must not fire after the block exits."""
@@ -572,7 +687,7 @@ class TestInMemoryBackendMembers:
 
 
 class TestExtractTrackerId:
-    """Verify the helper that reads the tracker_id from request.stamps."""
+    """Verify the helper that reads tracker_id from the Celery request."""
 
     def test_string_value_in_stamps(self):
         from tracker.step import _extract_tracker_id

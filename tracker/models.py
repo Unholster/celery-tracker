@@ -1,5 +1,5 @@
 import logging
-from datetime import datetime
+from datetime import UTC, datetime
 from typing import Any, Literal
 
 from pydantic import BaseModel, Field, model_validator
@@ -41,7 +41,8 @@ class ExecutionState(BaseModel):
     title: str | None = None
     state: CeleryTaskState = "PENDING"
     info: TrackerResult | None = None
-    created_on: datetime = Field(default_factory=datetime.now)
+    celery_task_id: str | None = None
+    created_on: datetime = Field(default_factory=lambda: datetime.now(UTC))
     started_on: datetime | None = None
     completed_on: datetime | None = None
 
